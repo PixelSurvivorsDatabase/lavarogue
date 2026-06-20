@@ -39,7 +39,7 @@ export function initLavaRogueCustomMoves(): void {
   (allMoves as unknown as Record<number, typeof dracoDance>)[dracoDanceId] = dracoDance;
 
   // Rayquaza already has Nasty Plot as egg move #2. Replace it with Draco Dance so unlocked Rayquaza gets it immediately.
-  speciesEggMoves[SpeciesId.RAYQUAZA] = [
+  (speciesEggMoves as any)[SpeciesId.RAYQUAZA] = [
     MoveId.V_CREATE,
     dracoDanceId,
     MoveId.CORE_ENFORCER,
