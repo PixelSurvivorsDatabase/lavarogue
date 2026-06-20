@@ -35,7 +35,7 @@ export function initLavaRogueCustomMoves(): void {
   dracoDance.name = "Draco Dance";
   dracoDance.effect = "The user performs a mystical draconic dance, boosting its Sp. Atk and Speed stats.";
 
-  (allMoves as unknown as typeof dracoDance[]).push(dracoDance);
+  (allMoves as unknown as Array<typeof dracoDance>).push(dracoDance);
 
   // Rayquaza already has Nasty Plot as egg move #2. Replace it with Draco Dance so unlocked Rayquaza gets it immediately.
   (speciesEggMoves as any)[SpeciesId.RAYQUAZA] = [
