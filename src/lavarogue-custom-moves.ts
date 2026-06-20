@@ -1,22 +1,39 @@
 /*
- * LavaRogue custom moves.
+ * LavaRogue custom moves and fork-only balance patches.
  *
- * Keeps custom fork-only moves isolated from generated upstream data files.
+ * Keeps custom fork-only changes isolated from generated upstream data files.
  */
 
+import { globalScene } from "#app/global-scene";
 import { speciesEggMoves } from "#balance/moves/egg-moves";
 import { allMoves } from "#data/data-lists";
+import { BattlerTagType } from "#enums/battler-tag-type";
+import { MoveCategory } from "#enums/move-category";
 import { MoveId } from "#enums/move-id";
 import { PokemonType } from "#enums/pokemon-type";
 import { SpeciesId } from "#enums/species-id";
 import { Stat } from "#enums/stat";
-import { SelfStatusMove, StatStageChangeAttr } from "#moves/move";
+import { Pokemon } from "#field/pokemon";
+import { BerryModifier } from "#modifiers/modifier";
+import { Move, SelfStatusMove, StatStageChangeAttr } from "#moves/move";
 import i18next from "i18next";
 
 const DRACO_DANCE_NAME = "Draco Dance";
 const DRACO_DANCE_EFFECT = "The user performs a mystical draconic dance, boosting its Sp. Atk and Speed stats.";
 
+const DRAGON_EMPEROR_DAMAGE_MULTIPLIER = 1.5;
+const DRAGON_EMPEROR_ACCURACY_MULTIPLIER = 1.5;
+const DRAGON_EMPEROR_DEFENSE_BOOST_PER_KO = 0.1;
+const DRAGON_EMPEROR_MAX_DEFENSE_BOOSTS = 6;
+const DRAGON_EMPEROR_FLINCH_CHANCE = 8;
+const DRAGON_EMPEROR_LEVEL_GRACE = 3;
+
 export const LAVAROGUE_MOVE_IDS: Record<string, MoveId> = {};
+
+type DragonEmperorBattleData = {
+  battleKey: string;
+  defenseBoosts: number;
+};
 
 function addRuntimeMoveId(name: string): MoveId {
   const id = (allMoves as unknown as unknown[]).length as MoveId;
@@ -38,8 +55,204 @@ function addCustomMoveText(): void {
   }
 }
 
+function isMegaRayquaza(pokemon?: Pokemon | null): pokemon is Pokemon {
+  return !!pokemon && pokemon.species?.speciesId === SpeciesId.RAYQUAZA && pokemon.isMega();
+}
+
+function hasDragonEmperor(pokemon?: Pokemon | null): pokemon is Pokemon {
+  return isMegaRayquaza(pokemon) && !!pokemon.passive;
+}
+
+function getCurrentBattleKey(): string {
+  const battle = globalScene?.currentBattle as any;
+  return `${battle?.battleType ?? "battle"}:${battle?.waveIndex ?? globalScene?.currentBattle?.waveIndex ?? "unknown"}`;
+}
+
+function getDragonEmperorBattleData(pokemon: Pokemon): DragonEmperorBattleData {
+  const battleKey = getCurrentBattleKey();
+  const anyPokemon = pokemon as any;
+
+  if (!anyPokemon.__lavarogueDragonEmperorData || anyPokemon.__lavarogueDragonEmperorData.battleKey !== battleKey) {
+    anyPokemon.__lavarogueDragonEmperorData = {
+      battleKey,
+      defenseBoosts: 0,
+    } satisfies DragonEmperorBattleData;
+  }
+
+  return anyPokemon.__lavarogueDragonEmperorData;
+}
+
+function getActiveOpposingDragonEmperor(pokemon: Pokemon): Pokemon | undefined {
+  return globalScene
+    ?.getField(true)
+    ?.find(fieldPokemon => fieldPokemon.isPlayer() !== pokemon.isPlayer() && hasDragonEmperor(fieldPokemon));
+}
+
+function addDragonEmperorDefenseBoost(pokemon: Pokemon): void {
+  const data = getDragonEmperorBattleData(pokemon);
+  data.defenseBoosts = Math.min(data.defenseBoosts + 1, DRAGON_EMPEROR_MAX_DEFENSE_BOOSTS);
+}
+
+function getDragonEmperorDefenseMultiplier(pokemon: Pokemon): number {
+  if (!hasDragonEmperor(pokemon)) {
+    return 1;
+  }
+
+  const boosts = getDragonEmperorBattleData(pokemon).defenseBoosts;
+  return 1 + boosts * DRAGON_EMPEROR_DEFENSE_BOOST_PER_KO;
+}
+
+function tryDragonEmperorFlinch(user: Pokemon): boolean {
+  const emperor = getActiveOpposingDragonEmperor(user);
+  if (!emperor || user.level >= emperor.level + DRAGON_EMPEROR_LEVEL_GRACE) {
+    return false;
+  }
+
+  if (globalScene.randBattleSeedInt(DRAGON_EMPEROR_FLINCH_CHANCE) !== 0) {
+    return false;
+  }
+
+  user.addTag(BattlerTagType.FLINCHED, 1, undefined, emperor.id);
+  return true;
+}
+
+function initDragonEmperorPassive(): void {
+  const installKey = "__lavarogueDragonEmperorInstalled";
+  if ((globalThis as any)[installKey]) {
+    return;
+  }
+  (globalThis as any)[installKey] = true;
+
+  const originalCalculateBattlePower = Move.prototype.calculateBattlePower;
+  Move.prototype.calculateBattlePower = function calculateDragonEmperorBattlePower(
+    source: Pokemon,
+    target: Pokemon,
+    simulated = false,
+  ): number {
+    let power = originalCalculateBattlePower.call(this, source, target, simulated);
+
+    if (power > 0 && hasDragonEmperor(source) && source.getMoveType(this) === PokemonType.DRAGON) {
+      power = Math.floor(power * DRAGON_EMPEROR_DAMAGE_MULTIPLIER);
+    }
+
+    return power;
+  };
+
+  const originalCalculateBattleAccuracy = Move.prototype.calculateBattleAccuracy;
+  Move.prototype.calculateBattleAccuracy = function calculateDragonEmperorBattleAccuracy(
+    user: Pokemon,
+    target: Pokemon,
+    simulated = false,
+  ): number {
+    const accuracy = originalCalculateBattleAccuracy.call(this, user, target, simulated);
+
+    if (
+      accuracy !== -1
+      && this.category !== MoveCategory.STATUS
+      && hasDragonEmperor(user)
+      && user.getMoveType(this) === PokemonType.DRAGON
+    ) {
+      return Math.floor(accuracy * DRAGON_EMPEROR_ACCURACY_MULTIPLIER);
+    }
+
+    return accuracy;
+  };
+
+  const originalGetAttackTypeEffectiveness = Pokemon.prototype.getAttackTypeEffectiveness;
+  Pokemon.prototype.getAttackTypeEffectiveness = function getDragonEmperorAttackTypeEffectiveness(
+    moveType: PokemonType,
+    params: any = {},
+  ) {
+    const effectiveness = originalGetAttackTypeEffectiveness.call(this, moveType, params);
+    const source = params?.source as Pokemon | undefined;
+
+    // Dragon Emperor lets Mega Rayquaza's Dragon moves hit Fairy-types neutrally instead of doing no damage.
+    if (moveType === PokemonType.DRAGON && hasDragonEmperor(source) && this.isOfType(PokemonType.FAIRY)) {
+      return effectiveness === 0 ? 1 : effectiveness;
+    }
+
+    // Dragon Emperor makes Fairy attacks neutral into Mega Rayquaza instead of super effective.
+    if (moveType === PokemonType.FAIRY && hasDragonEmperor(this)) {
+      return 1;
+    }
+
+    return effectiveness;
+  };
+
+  const originalGetEffectiveStat = Pokemon.prototype.getEffectiveStat;
+  Pokemon.prototype.getEffectiveStat = function getDragonEmperorEffectiveStat(
+    stat: any,
+    opponent?: any,
+    move?: any,
+    ignoreAbility?: any,
+    ignoreOppAbility?: any,
+    ignoreAllyAbility?: any,
+    isCritical?: any,
+    simulated?: any,
+    ignoreHeldItems?: any,
+  ) {
+    let statValue = originalGetEffectiveStat.call(
+      this,
+      stat,
+      opponent,
+      move,
+      ignoreAbility,
+      ignoreOppAbility,
+      ignoreAllyAbility,
+      isCritical,
+      simulated,
+      ignoreHeldItems,
+    );
+
+    if ((stat === Stat.DEF || stat === Stat.SPDEF) && hasDragonEmperor(this)) {
+      statValue *= getDragonEmperorDefenseMultiplier(this);
+    }
+
+    return Math.max(Math.floor(statValue), 1);
+  };
+
+  const originalDamageAndUpdate = Pokemon.prototype.damageAndUpdate;
+  Pokemon.prototype.damageAndUpdate = function damageAndUpdateDragonEmperorTracker(
+    damage: number,
+    params: any = {},
+  ): number {
+    const wasFainted = this.isFainted();
+    const result = originalDamageAndUpdate.call(this, damage, params);
+    const source = params?.source as Pokemon | undefined;
+
+    if (!wasFainted && this.isFainted() && hasDragonEmperor(source) && source.isOpponent(this)) {
+      addDragonEmperorDefenseBoost(source);
+    }
+
+    return result;
+  };
+
+  const originalBerryShouldApply = BerryModifier.prototype.shouldApply;
+  BerryModifier.prototype.shouldApply = function dragonEmperorBerrySuppression(pokemon: Pokemon): boolean {
+    if (pokemon && getActiveOpposingDragonEmperor(pokemon)) {
+      return false;
+    }
+
+    return originalBerryShouldApply.call(this, pokemon);
+  };
+
+  const originalApplyConditions = Move.prototype.applyConditions;
+  Move.prototype.applyConditions = function applyDragonEmperorAuraConditions(
+    user: Pokemon,
+    target: Pokemon,
+    sequence: -1 | 2 | 3 | 4 = 4,
+  ): boolean {
+    if (sequence === 4 && tryDragonEmperorFlinch(user)) {
+      return false;
+    }
+
+    return originalApplyConditions.call(this, user, target, sequence);
+  };
+}
+
 export function initLavaRogueCustomMoves(): void {
   addCustomMoveText();
+  initDragonEmperorPassive();
 
   const dracoDanceId = addRuntimeMoveId("DRACO_DANCE");
 
