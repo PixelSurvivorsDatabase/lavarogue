@@ -13,6 +13,9 @@ import { Stat } from "#enums/stat";
 import { SelfStatusMove, StatStageChangeAttr } from "#moves/move";
 import i18next from "i18next";
 
+const DRACO_DANCE_NAME = "Draco Dance";
+const DRACO_DANCE_EFFECT = "The user performs a mystical draconic dance, boosting its Sp. Atk and Speed stats.";
+
 export const LAVAROGUE_MOVE_IDS: Record<string, MoveId> = {};
 
 function addRuntimeMoveId(name: string): MoveId {
@@ -27,16 +30,11 @@ function addRuntimeMoveId(name: string): MoveId {
 }
 
 function addCustomMoveText(): void {
-  const languages = new Set(["en", i18next.language].filter(Boolean));
+  const languages = new Set(["en", "en-US", i18next.language].filter(Boolean));
 
   for (const language of languages) {
-    i18next.addResource(language, "move", "dracoDance.name", "Draco Dance");
-    i18next.addResource(
-      language,
-      "move",
-      "dracoDance.effect",
-      "The user performs a mystical draconic dance, boosting its Sp. Atk and Speed stats.",
-    );
+    i18next.addResource(language, "move", "dracoDance.name", DRACO_DANCE_NAME);
+    i18next.addResource(language, "move", "dracoDance.effect", DRACO_DANCE_EFFECT);
   }
 }
 
@@ -50,6 +48,10 @@ export function initLavaRogueCustomMoves(): void {
     .danceMove();
 
   dracoDance.localize();
+
+  // Fallback for places that read the Move object directly before/without i18next resolving custom keys.
+  dracoDance.name = DRACO_DANCE_NAME;
+  dracoDance.effect = DRACO_DANCE_EFFECT;
 
   (allMoves as unknown as Array<typeof dracoDance>).push(dracoDance);
 
