@@ -50,7 +50,11 @@ Weather.prototype.getAttackTypeMultiplier = function getBuffedDeltaStreamAttackT
 
 const originalTrySetWeather = Arena.prototype.trySetWeather;
 Arena.prototype.trySetWeather = function trySetBuffedDeltaStreamWeather(weather: WeatherType, user?: Pokemon): boolean {
-  if (this.weather?.weatherType === WeatherType.STRONG_WINDS && weather !== WeatherType.NONE && weather !== WeatherType.STRONG_WINDS) {
+  if (
+    this.weather?.weatherType === WeatherType.STRONG_WINDS
+    && weather !== WeatherType.NONE
+    && weather !== WeatherType.STRONG_WINDS
+  ) {
     return false;
   }
 
@@ -59,15 +63,15 @@ Arena.prototype.trySetWeather = function trySetBuffedDeltaStreamWeather(weather:
 
 const originalGetEffectiveStat = Pokemon.prototype.getEffectiveStat;
 Pokemon.prototype.getEffectiveStat = function getBuffedDeltaStreamEffectiveStat(
-  stat,
-  opponent,
-  move,
-  ignoreAbility,
-  ignoreOppAbility,
-  ignoreAllyAbility,
-  isCritical,
-  simulated,
-  ignoreHeldItems,
+  stat: any,
+  opponent?: any,
+  move?: any,
+  ignoreAbility?: any,
+  ignoreOppAbility?: any,
+  ignoreAllyAbility?: any,
+  isCritical?: any,
+  simulated?: any,
+  ignoreHeldItems?: any,
 ) {
   let statValue = originalGetEffectiveStat.call(
     this,
@@ -90,7 +94,10 @@ Pokemon.prototype.getEffectiveStat = function getBuffedDeltaStreamEffectiveStat(
 };
 
 const originalGetAttackTypeEffectiveness = Pokemon.prototype.getAttackTypeEffectiveness;
-Pokemon.prototype.getAttackTypeEffectiveness = function getBuffedDeltaStreamAttackTypeEffectiveness(moveType, params = {}) {
+Pokemon.prototype.getAttackTypeEffectiveness = function getBuffedDeltaStreamAttackTypeEffectiveness(
+  moveType: PokemonType,
+  params: any = {},
+) {
   const effectiveness = originalGetAttackTypeEffectiveness.call(this, moveType, params);
 
   if (
@@ -107,7 +114,11 @@ Pokemon.prototype.getAttackTypeEffectiveness = function getBuffedDeltaStreamAtta
 };
 
 const originalCalculateBattleAccuracy = Move.prototype.calculateBattleAccuracy;
-Move.prototype.calculateBattleAccuracy = function calculateBuffedDeltaStreamBattleAccuracy(user, target, simulated = false) {
+Move.prototype.calculateBattleAccuracy = function calculateBuffedDeltaStreamBattleAccuracy(
+  user: Pokemon,
+  target: Pokemon,
+  simulated = false,
+) {
   const accuracy = originalCalculateBattleAccuracy.call(this, user, target, simulated);
 
   if (accuracy === -1 || this.category === MoveCategory.STATUS || !isBuffedDeltaStreamActive()) {
