@@ -1,7 +1,7 @@
 import "#app/polyfills"; // All polyfills MUST be loaded first for side effects
-import "./lavarogue-delta-stream-buffs"; // LavaRogue custom Delta Stream buffs
 import "#init/init-manifest"; // initializes the manifest, must be done *before* i18n is initialized due to being used for caching
 import "#app/i18n"; // Initializes i18n on import
+import "./lavarogue-delta-stream-buffs"; // LavaRogue custom Delta Stream buffs
 
 import { InvertPostFX } from "#app/pipelines/invert";
 import { isBeta, isDev } from "#constants/app-constants";
