@@ -5,6 +5,7 @@
  */
 
 import { globalScene } from "#app/global-scene";
+import { getPokemonNameWithAffix } from "#app/messages";
 import { speciesEggMoves } from "#balance/moves/egg-moves";
 import { allMoves } from "#data/data-lists";
 import { BattlerTagType } from "#enums/battler-tag-type";
@@ -21,6 +22,7 @@ import i18next from "i18next";
 const DRACO_DANCE_NAME = "Draco Dance";
 const DRACO_DANCE_EFFECT = "The user performs a mystical draconic dance, boosting its Sp. Atk and Speed stats.";
 
+const DRAGON_EMPEROR_NAME = "Dragon Emperor";
 const DRAGON_EMPEROR_DAMAGE_MULTIPLIER = 1.5;
 const DRAGON_EMPEROR_ACCURACY_MULTIPLIER = 1.5;
 const DRAGON_EMPEROR_DEFENSE_BOOST_PER_KO = 0.1;
@@ -88,9 +90,31 @@ function getActiveOpposingDragonEmperor(pokemon: Pokemon): Pokemon | undefined {
     ?.find(fieldPokemon => fieldPokemon.isPlayer() !== pokemon.isPlayer() && hasDragonEmperor(fieldPokemon));
 }
 
-function addDragonEmperorDefenseBoost(pokemon: Pokemon): void {
+function queueDragonEmperorAbilityDisplay(pokemon: Pokemon): void {
+  const anyPokemon = pokemon as any;
+  const originalGetPassiveAbility = anyPokemon.getPassiveAbility;
+
+  // ShowAbilityPhase captures the name immediately, so this only affects the queued popup.
+  anyPokemon.getPassiveAbility = () => ({ name: DRAGON_EMPEROR_NAME, id: -999 });
+  try {
+    globalScene.phaseManager.queueAbilityDisplay(pokemon, true, true);
+  } finally {
+    anyPokemon.getPassiveAbility = originalGetPassiveAbility;
+  }
+}
+
+function queueDragonEmperorTrigger(pokemon: Pokemon, messages: string[]): void {
+  queueDragonEmperorAbilityDisplay(pokemon);
+  for (const message of messages) {
+    globalScene.phaseManager.queueMessage(message);
+  }
+  globalScene.phaseManager.queueAbilityDisplay(pokemon, true, false);
+}
+
+function addDragonEmperorDefenseBoost(pokemon: Pokemon): number {
   const data = getDragonEmperorBattleData(pokemon);
   data.defenseBoosts = Math.min(data.defenseBoosts + 1, DRAGON_EMPEROR_MAX_DEFENSE_BOOSTS);
+  return data.defenseBoosts;
 }
 
 function getDragonEmperorDefenseMultiplier(pokemon: Pokemon): number {
@@ -112,8 +136,14 @@ function tryDragonEmperorFlinch(user: Pokemon): boolean {
     return false;
   }
 
-  user.addTag(BattlerTagType.FLINCHED, 1, undefined, emperor.id);
-  return true;
+  const flinched = user.addTag(BattlerTagType.FLINCHED, 1, undefined, emperor.id);
+  if (flinched) {
+    queueDragonEmperorTrigger(emperor, [
+      `${getPokemonNameWithAffix(user)} flinched because of ${getPokemonNameWithAffix(emperor)}'s Terrifying Aura!`,
+    ]);
+  }
+
+  return flinched;
 }
 
 function initDragonEmperorPassive(): void {
@@ -221,7 +251,14 @@ function initDragonEmperorPassive(): void {
     const source = params?.source as Pokemon | undefined;
 
     if (!wasFainted && this.isFainted() && hasDragonEmperor(source) && source.isOpponent(this)) {
-      addDragonEmperorDefenseBoost(source);
+      const defenseBoosts = addDragonEmperorDefenseBoost(source);
+      const boostPercent = Math.round(defenseBoosts * DRAGON_EMPEROR_DEFENSE_BOOST_PER_KO * 100);
+
+      queueDragonEmperorTrigger(source, [
+        `${getPokemonNameWithAffix(source)}'s stats were boosted because of Dragon Emperor!`,
+        `${getPokemonNameWithAffix(source)}'s Defense and Sp. Def rose by 10%! (${boostPercent}% total, max 60%)`,
+      ]);
+      source.updateInfo?.(true);
     }
 
     return result;
