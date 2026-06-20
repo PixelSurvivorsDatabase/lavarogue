@@ -12,18 +12,17 @@ import { SpeciesId } from "#enums/species-id";
 import { Stat } from "#enums/stat";
 import { SelfStatusMove, StatStageChangeAttr } from "#moves/move";
 
-export const LAVAROGUE_MOVE_IDS = {
-  DRACO_DANCE: 10_000,
-} as const;
+export const LAVAROGUE_MOVE_IDS: Record<string, MoveId> = {};
 
-function addRuntimeMoveId(name: keyof typeof LAVAROGUE_MOVE_IDS): MoveId {
-  const id = LAVAROGUE_MOVE_IDS[name];
+function addRuntimeMoveId(name: string): MoveId {
+  const id = (allMoves as unknown as unknown[]).length as MoveId;
   const moveIdMap = MoveId as unknown as Record<string | number, string | number>;
 
   moveIdMap[name] = id;
   moveIdMap[id] = name;
+  LAVAROGUE_MOVE_IDS[name] = id;
 
-  return id as MoveId;
+  return id;
 }
 
 export function initLavaRogueCustomMoves(): void {
@@ -36,7 +35,7 @@ export function initLavaRogueCustomMoves(): void {
   dracoDance.name = "Draco Dance";
   dracoDance.effect = "The user performs a mystical draconic dance, boosting its Sp. Atk and Speed stats.";
 
-  (allMoves as unknown as Record<number, typeof dracoDance>)[dracoDanceId] = dracoDance;
+  (allMoves as unknown as typeof dracoDance[]).push(dracoDance);
 
   // Rayquaza already has Nasty Plot as egg move #2. Replace it with Draco Dance so unlocked Rayquaza gets it immediately.
   (speciesEggMoves as any)[SpeciesId.RAYQUAZA] = [
