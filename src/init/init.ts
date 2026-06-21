@@ -10,6 +10,7 @@ import { initBiomeDepths } from "#init/init-biome-depths";
 import { initBiomes } from "#init/init-biomes";
 import { initCatchableSpecies } from "#init/init-catchable-species";
 import { initLavaRogueCustomMoves } from "../lavarogue-custom-moves";
+import { initLavaRogueDevTools } from "../lavarogue-devtools";
 import { initModifierPools } from "#modifiers/init-modifier-pools";
 import { initModifierTypes } from "#modifiers/modifier-type";
 import { initMoves } from "#moves/move";
@@ -33,6 +34,7 @@ export async function initializeGame(): Promise<void> {
   initTrainerTypeDialogue();
   initMoves();
   initLavaRogueCustomMoves();
+  initLavaRogueDevTools();
   initAbilities();
   initChallenges();
   initMysteryEncounters();
