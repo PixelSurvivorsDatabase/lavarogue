@@ -16,11 +16,24 @@ import { SpeciesId } from "#enums/species-id";
 import { Stat } from "#enums/stat";
 import { Pokemon } from "#field/pokemon";
 import { BerryModifier } from "#modifiers/modifier";
-import { Move, SelfStatusMove, StatStageChangeAttr } from "#moves/move";
+import { AttackMove, Move, SelfStatusMove, StatStageChangeAttr } from "#moves/move";
 import i18next from "i18next";
 
 const DRACO_DANCE_NAME = "Draco Dance";
 const DRACO_DANCE_EFFECT = "The user performs a mystical draconic dance, boosting its Sp. Atk and Speed stats.";
+
+const CELESTIAL_ASCENT_NAME = "Celestial Ascent";
+const CELESTIAL_ASCENT_EFFECT =
+  "The user flies up and strikes down on the target, leaving a rainbow trail. This Stellar-type move is super effective against Dark, Poison, Psychic, Fighting, Ghost, Dragon, and Steel types.";
+const CELESTIAL_ASCENT_SUPER_EFFECTIVE_TYPES = [
+  PokemonType.DARK,
+  PokemonType.POISON,
+  PokemonType.PSYCHIC,
+  PokemonType.FIGHTING,
+  PokemonType.GHOST,
+  PokemonType.DRAGON,
+  PokemonType.STEEL,
+] as const;
 
 const DRAGON_EMPEROR_NAME = "Dragon Emperor";
 const DRAGON_EMPEROR_DAMAGE_MULTIPLIER = 1.5;
@@ -54,6 +67,9 @@ function addCustomMoveText(): void {
   for (const language of languages) {
     i18next.addResource(language, "move", "dracoDance.name", DRACO_DANCE_NAME);
     i18next.addResource(language, "move", "dracoDance.effect", DRACO_DANCE_EFFECT);
+
+    i18next.addResource(language, "move", "celestialAscent.name", CELESTIAL_ASCENT_NAME);
+    i18next.addResource(language, "move", "celestialAscent.effect", CELESTIAL_ASCENT_EFFECT);
   }
 }
 
@@ -146,6 +162,13 @@ function tryDragonEmperorFlinch(user: Pokemon): boolean {
   return flinched;
 }
 
+function getCelestialAscentEffectiveness(target: Pokemon): number {
+  return CELESTIAL_ASCENT_SUPER_EFFECTIVE_TYPES.reduce(
+    (multiplier, type) => multiplier * (target.isOfType(type) ? 2 : 1),
+    1,
+  );
+}
+
 function initDragonEmperorPassive(): void {
   const installKey = "__lavarogueDragonEmperorInstalled";
   if ((globalThis as any)[installKey]) {
@@ -195,6 +218,12 @@ function initDragonEmperorPassive(): void {
   ) {
     const effectiveness = originalGetAttackTypeEffectiveness.call(this, moveType, params);
     const source = params?.source as Pokemon | undefined;
+    const move = params?.move as Move | undefined;
+
+    // Celestial Ascent uses Stellar typing, but has a custom super-effective type chart.
+    if (move?.id === LAVAROGUE_MOVE_IDS.CELESTIAL_ASCENT) {
+      return Math.max(effectiveness, getCelestialAscentEffectiveness(this));
+    }
 
     // Dragon Emperor lets Mega Rayquaza's Dragon moves hit Fairy-types neutrally instead of doing no damage.
     if (moveType === PokemonType.DRAGON && hasDragonEmperor(source) && this.isOfType(PokemonType.FAIRY)) {
@@ -292,6 +321,7 @@ export function initLavaRogueCustomMoves(): void {
   initDragonEmperorPassive();
 
   const dracoDanceId = addRuntimeMoveId("DRACO_DANCE");
+  const celestialAscentId = addRuntimeMoveId("CELESTIAL_ASCENT");
 
   const dracoDance = new SelfStatusMove(dracoDanceId, PokemonType.DRAGON, -1, 20, -1, 0, 9)
     .attr(StatStageChangeAttr, [Stat.SPATK, Stat.SPD], 1, true)
@@ -303,13 +333,30 @@ export function initLavaRogueCustomMoves(): void {
   dracoDance.name = DRACO_DANCE_NAME;
   dracoDance.effect = DRACO_DANCE_EFFECT;
 
-  (allMoves as unknown as Array<typeof dracoDance>).push(dracoDance);
+  const celestialAscent = new AttackMove(
+    celestialAscentId,
+    PokemonType.STELLAR,
+    MoveCategory.PHYSICAL,
+    140,
+    80,
+    5,
+    -1,
+    0,
+    9,
+  ).windMove();
+
+  celestialAscent.localize();
+  celestialAscent.name = CELESTIAL_ASCENT_NAME;
+  celestialAscent.effect = CELESTIAL_ASCENT_EFFECT;
+
+  (allMoves as unknown as Array<typeof dracoDance | typeof celestialAscent>).push(dracoDance, celestialAscent);
 
   // Rayquaza already has Nasty Plot as egg move #2. Replace it with Draco Dance so unlocked Rayquaza gets it immediately.
+  // Celestial Ascent replaces Dragon Darts as the rare/custom offensive egg move.
   (speciesEggMoves as any)[SpeciesId.RAYQUAZA] = [
     MoveId.V_CREATE,
     dracoDanceId,
     MoveId.CORE_ENFORCER,
-    MoveId.DRAGON_DARTS,
+    celestialAscentId,
   ];
 }
