@@ -12,7 +12,7 @@ import { initCatchableSpecies } from "#init/init-catchable-species";
 import { initLavaRogueCelestialAscentBuffs } from "../lavarogue-celestial-ascent-buffs";
 import { initLavaRogueCustomMoves } from "../lavarogue-custom-moves";
 import { initLavaRogueDevTools } from "../lavarogue-devtools";
-import { initLavaRogueStarDust } from "../lavarogue-star-dust";
+import { initLavaRogueStarDust, initLavaRogueStarDustPool } from "../lavarogue-star-dust";
 import { initModifierPools } from "#modifiers/init-modifier-pools";
 import { initModifierTypes } from "#modifiers/modifier-type";
 import { initMoves } from "#moves/move";
@@ -28,6 +28,7 @@ export async function initializeGame(): Promise<void> {
   initModifierTypes();
   initLavaRogueStarDust();
   initModifierPools();
+  initLavaRogueStarDustPool();
   initAchievements();
   initVouchers();
   initStatsKeys();
