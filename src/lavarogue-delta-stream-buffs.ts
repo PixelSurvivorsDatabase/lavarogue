@@ -5,7 +5,6 @@
  */
 
 import { globalScene } from "#app/global-scene";
-import { Weather } from "#data/weather";
 import { getTypeDamageMultiplier } from "#data/type";
 import { AbilityId } from "#enums/ability-id";
 import { MoveCategory } from "#enums/move-category";
@@ -20,6 +19,11 @@ const DELTA_STREAM_SUPPRESSED_TYPES = new Set<PokemonType>([
   PokemonType.ROCK,
   PokemonType.ELECTRIC,
   PokemonType.ICE,
+]);
+
+const DELTA_STREAM_BOOSTED_TYPES = new Set<PokemonType>([
+  PokemonType.FLYING,
+  PokemonType.DRAGON,
 ]);
 
 function isBuffedDeltaStreamActive(): boolean {
@@ -37,17 +41,6 @@ function sideHasDeltaStream(pokemon: Pokemon): boolean {
     .some(fieldPokemon => fieldPokemon.isPlayer() === pokemon.isPlayer() && fieldPokemon.hasAbility(AbilityId.DELTA_STREAM));
 }
 
-const originalGetAttackTypeMultiplier = Weather.prototype.getAttackTypeMultiplier;
-Weather.prototype.getAttackTypeMultiplier = function getBuffedDeltaStreamAttackTypeMultiplier(attackType: PokemonType) {
-  const multiplier = originalGetAttackTypeMultiplier.call(this, attackType);
-
-  if (this.weatherType === WeatherType.STRONG_WINDS && [PokemonType.FLYING, PokemonType.DRAGON].includes(attackType)) {
-    return multiplier * 1.25;
-  }
-
-  return multiplier;
-};
-
 const originalTrySetWeather = Arena.prototype.trySetWeather;
 Arena.prototype.trySetWeather = function trySetBuffedDeltaStreamWeather(weather: WeatherType, user?: Pokemon): boolean {
   if (
@@ -59,6 +52,21 @@ Arena.prototype.trySetWeather = function trySetBuffedDeltaStreamWeather(weather:
   }
 
   return originalTrySetWeather.call(this, weather, user);
+};
+
+const originalCalculateBattlePower = Move.prototype.calculateBattlePower;
+Move.prototype.calculateBattlePower = function calculateBuffedDeltaStreamBattlePower(
+  source: Pokemon,
+  target: Pokemon,
+  simulated = false,
+): number {
+  let power = originalCalculateBattlePower.call(this, source, target, simulated);
+
+  if (power > 0 && sideHasDeltaStream(source) && DELTA_STREAM_BOOSTED_TYPES.has(source.getMoveType(this))) {
+    power = Math.max(Math.floor(power * 1.25), 1);
+  }
+
+  return power;
 };
 
 const originalGetEffectiveStat = Pokemon.prototype.getEffectiveStat;
@@ -101,7 +109,7 @@ Pokemon.prototype.getAttackTypeEffectiveness = function getBuffedDeltaStreamAtta
   const effectiveness = originalGetAttackTypeEffectiveness.call(this, moveType, params);
 
   if (
-    isBuffedDeltaStreamActive()
+    sideHasDeltaStream(this)
     && !params.ignoreStrongWinds
     && !this.isOfType(PokemonType.FLYING)
     && DELTA_STREAM_SUPPRESSED_TYPES.has(moveType)
@@ -121,7 +129,7 @@ Move.prototype.calculateBattleAccuracy = function calculateBuffedDeltaStreamBatt
 ) {
   const accuracy = originalCalculateBattleAccuracy.call(this, user, target, simulated);
 
-  if (accuracy === -1 || this.category === MoveCategory.STATUS || !isBuffedDeltaStreamActive()) {
+  if (accuracy === -1 || this.category === MoveCategory.STATUS || !sideHasDeltaStream(target)) {
     return accuracy;
   }
 
