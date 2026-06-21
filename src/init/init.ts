@@ -10,6 +10,7 @@ import { initBiomeDepths } from "#init/init-biome-depths";
 import { initBiomes } from "#init/init-biomes";
 import { initCatchableSpecies } from "#init/init-catchable-species";
 import { initLavaRogueCelestialAscentBuffs } from "../lavarogue-celestial-ascent-buffs";
+import { initLavaRogueCosmicRayquaza } from "../lavarogue-cosmic-rayquaza";
 import { initLavaRogueCustomMoves } from "../lavarogue-custom-moves";
 import { initLavaRogueDevTools } from "../lavarogue-devtools";
 import { initLavaRogueStarDust, initLavaRogueStarDustPool } from "../lavarogue-star-dust";
@@ -40,6 +41,7 @@ export async function initializeGame(): Promise<void> {
   initLavaRogueCustomMoves();
   initLavaRogueCelestialAscentBuffs();
   initLavaRogueDevTools();
+  initLavaRogueCosmicRayquaza();
   initAbilities();
   initChallenges();
   initMysteryEncounters();
