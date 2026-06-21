@@ -17,6 +17,7 @@ import { Stat } from "#enums/stat";
 import { Pokemon } from "#field/pokemon";
 import { BerryModifier } from "#modifiers/modifier";
 import { AttackMove, Move, SelfStatusMove, StatStageChangeAttr } from "#moves/move";
+import { TurnStartPhase } from "#phases/turn-start-phase";
 import i18next from "i18next";
 
 const DRACO_DANCE_NAME = "Draco Dance";
@@ -42,12 +43,16 @@ const DRAGON_EMPEROR_DEFENSE_BOOST_PER_KO = 0.1;
 const DRAGON_EMPEROR_MAX_DEFENSE_BOOSTS = 6;
 const DRAGON_EMPEROR_FLINCH_CHANCE = 8;
 const DRAGON_EMPEROR_LEVEL_GRACE = 3;
+const DRAGON_EMPEROR_PULSE_BASE_PERCENT = 0.1;
+const DRAGON_EMPEROR_PULSE_STACK_PERCENT = 0.05;
+const DRAGON_EMPEROR_PULSE_STACK_INTERVAL = 2;
 
 export const LAVAROGUE_MOVE_IDS: Record<string, MoveId> = {};
 
 type DragonEmperorBattleData = {
   battleKey: string;
   defenseBoosts: number;
+  pulseCount: number;
 };
 
 function addRuntimeMoveId(name: string): MoveId {
@@ -94,7 +99,12 @@ function getDragonEmperorBattleData(pokemon: Pokemon): DragonEmperorBattleData {
     anyPokemon.__lavarogueDragonEmperorData = {
       battleKey,
       defenseBoosts: 0,
+      pulseCount: 0,
     } satisfies DragonEmperorBattleData;
+  }
+
+  if (anyPokemon.__lavarogueDragonEmperorData.pulseCount === undefined) {
+    anyPokemon.__lavarogueDragonEmperorData.pulseCount = 0;
   }
 
   return anyPokemon.__lavarogueDragonEmperorData;
@@ -169,12 +179,91 @@ function getCelestialAscentEffectiveness(target: Pokemon): number {
   );
 }
 
+function getDragonEmperorPulsePercent(emperor: Pokemon): number {
+  const pulseCount = Math.max(getDragonEmperorBattleData(emperor).pulseCount, 1);
+  const stackCount = Math.floor((pulseCount - 1) / DRAGON_EMPEROR_PULSE_STACK_INTERVAL);
+  return DRAGON_EMPEROR_PULSE_BASE_PERCENT + stackCount * DRAGON_EMPEROR_PULSE_STACK_PERCENT;
+}
+
+function isDragonEmperorPulseImmune(target: Pokemon): boolean {
+  return target.isOfType(PokemonType.FAIRY);
+}
+
+function isDragonEmperorPulseResisted(target: Pokemon): boolean {
+  return target.isOfType(PokemonType.STEEL)
+    || target.isOfType(PokemonType.ROCK)
+    || target.isOfType(PokemonType.GROUND);
+}
+
+function calculateDragonEmperorPulseDamage(emperor: Pokemon, target: Pokemon): number {
+  if (target.hp <= 1 || isDragonEmperorPulseImmune(target)) {
+    return 0;
+  }
+
+  let percent = getDragonEmperorPulsePercent(emperor);
+  if (isDragonEmperorPulseResisted(target)) {
+    percent /= 2;
+  }
+
+  return Math.min(Math.max(Math.ceil(target.hp * percent), 1), target.hp - 1);
+}
+
+function applyDragonEmperorPulse(emperor: Pokemon): void {
+  if (!hasDragonEmperor(emperor) || emperor.isFainted()) {
+    return;
+  }
+
+  const targets = globalScene
+    .getField(true)
+    .filter(target => target.isPlayer() !== emperor.isPlayer() && !target.isFainted());
+
+  if (!targets.length) {
+    return;
+  }
+
+  const data = getDragonEmperorBattleData(emperor);
+  data.pulseCount += 1;
+
+  const pulsePercent = Math.round(getDragonEmperorPulsePercent(emperor) * 100);
+  queueDragonEmperorTrigger(emperor, [
+    `${getPokemonNameWithAffix(emperor)} released an Imperial Pulse! (${pulsePercent}% current HP true damage)`,
+  ]);
+
+  for (const target of targets) {
+    const damage = calculateDragonEmperorPulseDamage(emperor, target);
+    if (damage <= 0) {
+      if (isDragonEmperorPulseImmune(target)) {
+        globalScene.phaseManager.queueMessage(`${getPokemonNameWithAffix(target)} was immune to the Imperial Pulse!`);
+      }
+      continue;
+    }
+
+    target.damageAndUpdate(damage, {
+      source: emperor,
+      ignoreSegments: true,
+    });
+    target.updateInfo?.(true);
+  }
+}
+
+function applyDragonEmperorPulses(): void {
+  for (const emperor of globalScene.getField(true).filter(hasDragonEmperor)) {
+    applyDragonEmperorPulse(emperor);
+  }
+}
+
 function initDragonEmperorPassive(): void {
   const installKey = "__lavarogueDragonEmperorInstalled";
   if ((globalThis as any)[installKey]) {
     return;
   }
   (globalThis as any)[installKey] = true;
+
+  const originalTurnStart = TurnStartPhase.prototype.start;
+  TurnStartPhase.prototype.start = function startDragonEmperorPulseTurn(): void {
+    applyDragonEmperorPulses();
+    originalTurnStart.call(this);
+  };
 
   const originalCalculateBattlePower = Move.prototype.calculateBattlePower;
   Move.prototype.calculateBattlePower = function calculateDragonEmperorBattlePower(
