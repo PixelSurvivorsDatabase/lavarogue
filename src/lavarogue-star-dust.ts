@@ -51,11 +51,14 @@ export function initLavaRogueStarDust(): void {
 export function initLavaRogueStarDustPool(): void {
   addStarDustText();
 
-  const starDustType = createStarDustModifierType();
   const alreadyInPool = modifierPool[ModifierTier.ULTRA]?.some(weighted => weighted.modifierType.id === STAR_DUST_ID);
 
   if (!alreadyInPool) {
-    const weightedStarDust = new WeightedModifierType(starDustType, STAR_DUST_ULTRA_WEIGHT, STAR_DUST_ULTRA_WEIGHT);
+    const weightedStarDust = new WeightedModifierType(
+      (modifierTypes as any)[STAR_DUST_ID],
+      STAR_DUST_ULTRA_WEIGHT,
+      STAR_DUST_ULTRA_WEIGHT,
+    );
     weightedStarDust.setTier(ModifierTier.ULTRA);
     modifierPool[ModifierTier.ULTRA].push(weightedStarDust);
   }
