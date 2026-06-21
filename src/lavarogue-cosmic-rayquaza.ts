@@ -25,7 +25,7 @@ import { PokemonType } from "#enums/pokemon-type";
 import { SpeciesId } from "#enums/species-id";
 import { Stat } from "#enums/stat";
 import { StatusEffect } from "#enums/status-effect";
-import type { Pokemon } from "#field/pokemon";
+import { Pokemon } from "#field/pokemon";
 import { PokemonMove } from "#moves/pokemon-move";
 import { AttackMove, Move, MoveEffectAttr } from "#moves/move";
 import { MovePhase } from "#phases/move-phase";
@@ -485,42 +485,37 @@ function installCosmicMechanics(): void {
     originalTurnStart.call(this);
   };
 
-  const originalGetEffectiveStat = (globalScene.constructor as any).prototype;
-  void originalGetEffectiveStat;
+  const originalPokemonGetEffectiveStat = Pokemon.prototype.getEffectiveStat;
+  Pokemon.prototype.getEffectiveStat = function getCosmicEffectiveStat(
+    stat: any,
+    opponent?: any,
+    move?: any,
+    ignoreAbility?: any,
+    ignoreOppAbility?: any,
+    ignoreAllyAbility?: any,
+    isCritical?: any,
+    simulated?: any,
+    ignoreHeldItems?: any,
+  ) {
+    let statValue = originalPokemonGetEffectiveStat.call(
+      this,
+      stat,
+      opponent,
+      move,
+      ignoreAbility,
+      ignoreOppAbility,
+      ignoreAllyAbility,
+      isCritical,
+      simulated,
+      ignoreHeldItems,
+    );
 
-  const originalPokemonGetEffectiveStat = (Object.getPrototypeOf(globalScene.getPlayerParty?.()?.[0] ?? {}) as any).getEffectiveStat;
-  if (originalPokemonGetEffectiveStat) {
-    (Object.getPrototypeOf(globalScene.getPlayerParty?.()?.[0] ?? {}) as any).getEffectiveStat = function getCosmicEffectiveStat(
-      stat: any,
-      opponent?: any,
-      move?: any,
-      ignoreAbility?: any,
-      ignoreOppAbility?: any,
-      ignoreAllyAbility?: any,
-      isCritical?: any,
-      simulated?: any,
-      ignoreHeldItems?: any,
-    ) {
-      let statValue = originalPokemonGetEffectiveStat.call(
-        this,
-        stat,
-        opponent,
-        move,
-        ignoreAbility,
-        ignoreOppAbility,
-        ignoreAllyAbility,
-        isCritical,
-        simulated,
-        ignoreHeldItems,
-      );
+    if ([Stat.DEF, Stat.SPDEF, Stat.SPATK, Stat.SPD].includes(stat) && !isCosmicRayquaza(this)) {
+      statValue *= getRadiationStatMultiplier(this);
+    }
 
-      if ([Stat.DEF, Stat.SPDEF, Stat.SPATK, Stat.SPD].includes(stat) && !isCosmicRayquaza(this)) {
-        statValue *= getRadiationStatMultiplier(this);
-      }
-
-      return Math.max(Math.floor(statValue), 1);
-    };
-  }
+    return Math.max(Math.floor(statValue), 1);
+  };
 
   const originalCalculateBattlePower = Move.prototype.calculateBattlePower;
   Move.prototype.calculateBattlePower = function calculateCosmicBattlePower(
@@ -535,47 +530,43 @@ function installCosmicMechanics(): void {
     return power;
   };
 
-  const originalGetAttackTypeEffectiveness = (Object.getPrototypeOf(globalScene.getPlayerParty?.()?.[0] ?? {}) as any).getAttackTypeEffectiveness;
-  if (originalGetAttackTypeEffectiveness) {
-    (Object.getPrototypeOf(globalScene.getPlayerParty?.()?.[0] ?? {}) as any).getAttackTypeEffectiveness = function getCosmicAttackTypeEffectiveness(
-      moveType: PokemonType,
-      params: any = {},
-    ) {
-      const effectiveness = originalGetAttackTypeEffectiveness.call(this, moveType, params);
-      const move = params?.move as Move | undefined;
+  const originalGetAttackTypeEffectiveness = Pokemon.prototype.getAttackTypeEffectiveness;
+  Pokemon.prototype.getAttackTypeEffectiveness = function getCosmicAttackTypeEffectiveness(
+    moveType: PokemonType,
+    params: any = {},
+  ) {
+    const effectiveness = originalGetAttackTypeEffectiveness.call(this, moveType, params);
+    const move = params?.move as Move | undefined;
 
-      if (move?.id === LAVAROGUE_MOVE_IDS.NUCLEAR_FISSION) {
-        const getsCosmicWeakness = NUCLEAR_FISSION_SUPER_EFFECTIVE_TYPES.some(type => this.isOfType(type));
-        return getsCosmicWeakness ? Math.max(effectiveness, 2) : effectiveness;
-      }
+    if (move?.id === LAVAROGUE_MOVE_IDS.NUCLEAR_FISSION) {
+      const getsCosmicWeakness = NUCLEAR_FISSION_SUPER_EFFECTIVE_TYPES.some(type => this.isOfType(type));
+      return getsCosmicWeakness ? Math.max(effectiveness, 2) : effectiveness;
+    }
 
-      if (move?.id === LAVAROGUE_MOVE_IDS.SINGULARITY) {
-        return Math.max(effectiveness, 2);
-      }
+    if (move?.id === LAVAROGUE_MOVE_IDS.SINGULARITY) {
+      return Math.max(effectiveness, 2);
+    }
 
-      return effectiveness;
-    };
-  }
+    return effectiveness;
+  };
 
-  const originalDoSetStatus = (Object.getPrototypeOf(globalScene.getPlayerParty?.()?.[0] ?? {}) as any).doSetStatus;
-  if (originalDoSetStatus) {
-    (Object.getPrototypeOf(globalScene.getPlayerParty?.()?.[0] ?? {}) as any).doSetStatus = function doSetStatusCosmicRayquaza(
-      effect: StatusEffect,
-      sleepTurnsRemaining?: number,
-    ): void {
-      if (isCosmicRayquaza(this) && effect !== StatusEffect.NONE && effect !== StatusEffect.FAINT) {
-        const healAmount = Math.max(Math.ceil(this.getMaxHp() * STATUS_ABSORB_HEAL_PERCENT), 1);
-        const healed = this.heal(healAmount);
-        this.updateInfo?.(true);
-        globalScene.phaseManager.queueMessage(
-          `${getPokemonNameWithAffix(this)} absorbed the status with ${COSMIC_DREAD_NAME}!${healed ? ` It restored ${healed} HP!` : ""}`,
-        );
-        return;
-      }
+  const originalDoSetStatus = Pokemon.prototype.doSetStatus;
+  Pokemon.prototype.doSetStatus = function doSetStatusCosmicRayquaza(
+    effect: StatusEffect,
+    sleepTurnsRemaining?: number,
+  ): void {
+    if (isCosmicRayquaza(this) && effect !== StatusEffect.NONE && effect !== StatusEffect.FAINT) {
+      const healAmount = Math.max(Math.ceil(this.getMaxHp() * STATUS_ABSORB_HEAL_PERCENT), 1);
+      const healed = this.heal(healAmount);
+      this.updateInfo?.(true);
+      globalScene.phaseManager.queueMessage(
+        `${getPokemonNameWithAffix(this)} absorbed the status with ${COSMIC_DREAD_NAME}!${healed ? ` It restored ${healed} HP!` : ""}`,
+      );
+      return;
+    }
 
-      originalDoSetStatus.call(this, effect, sleepTurnsRemaining);
-    };
-  }
+    originalDoSetStatus.call(this, effect, sleepTurnsRemaining);
+  };
 
   const originalApplyConditions = Move.prototype.applyConditions;
   Move.prototype.applyConditions = function applyCosmicRayquazaConditions(
