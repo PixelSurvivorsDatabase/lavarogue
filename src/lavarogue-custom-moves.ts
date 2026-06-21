@@ -56,7 +56,12 @@ type DragonEmperorBattleData = {
 };
 
 function addRuntimeMoveId(name: string): MoveId {
-  const id = (allMoves as unknown as unknown[]).length as MoveId;
+  if (LAVAROGUE_MOVE_IDS[name] !== undefined) {
+    return LAVAROGUE_MOVE_IDS[name];
+  }
+
+  const customMoveCount = Object.keys(LAVAROGUE_MOVE_IDS).length;
+  const id = ((allMoves as unknown as unknown[]).length + customMoveCount) as MoveId;
   const moveIdMap = MoveId as unknown as Record<string | number, string | number>;
 
   moveIdMap[name] = id;
